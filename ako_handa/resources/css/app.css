@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+}
+
+:root {
+    color-scheme: dark;
+    --command-bg: #051613;
+    --command-surface: #0d1f1b;
+    --command-elevated: #102621;
+    --command-border: #163b33;
+    --command-emerald: #10b981;
+    --command-amber: #f59e0b;
+    --command-crimson: #ef4444;
+    --command-teal: #14b8a6;
+    --command-cyan: #06b6d4;
+    --command-text: #ffffff;
+    --command-secondary: #94a3b8;
+    --command-muted: #64748b;
+}
+
+html {
+    background: var(--command-bg);
+}
+
+body {
+    min-height: 100vh;
+    background: var(--command-bg);
+    color: var(--command-text);
+}
+
+.command-reveal {
+    animation: command-reveal 650ms ease-out both;
+}
+
+@keyframes command-reveal {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(5, 22, 19, 0.8);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(16, 185, 129, 0.45);
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(16, 185, 129, 0.65);
+}
