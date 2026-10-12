@@ -140,10 +140,9 @@
         <!-- ==================== B. HIGH-VISIBILITY ACTION CARDS (4 CARDS) ==================== -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <!-- Action Card 1: 🚨 Report New Incident / Hazard (Highlighted Primary Emerald Glow) -->
-            <button
-                type="button"
-                @click="wizardStep = 1; reportWizardOpen = true"
-                class="group text-left rounded-2xl border-2 border-emerald-400 bg-gradient-to-br from-[#102621] to-[#0d1f1b] p-5 shadow-[0_0_25px_rgba(16,185,129,0.25)] hover:border-emerald-300 transition duration-200 relative overflow-hidden"
+            <a
+                href="{{ route('reporter.reports.create') }}"
+                class="group block text-left rounded-2xl border-2 border-emerald-400 bg-gradient-to-br from-[#102621] to-[#0d1f1b] p-5 shadow-[0_0_25px_rgba(16,185,129,0.25)] hover:border-emerald-300 transition duration-200 relative overflow-hidden"
             >
                 <div class="flex items-center justify-between">
                     <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-2xl shadow-lg">
@@ -164,7 +163,7 @@
                     <span>Launch 4-Step Wizard</span>
                     <span class="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
-            </button>
+            </a>
 
             <!-- Action Card 2: 📋 Track My Submitted Reports -->
             <a

@@ -1,23 +1,41 @@
 @import "tailwindcss";
 
-@theme {
-    --font-sans: "Plus Jakarta Sans", ui-sans-serif, sans-serif;
-}
-
 :root {
+    --font-sans: "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+    --color-surface: #051424;
+    --color-surface-deep: #010f1f;
+    --color-surface-container: #0d1c2d;
+    --color-surface-container-high: #16283d;
+    --color-border-subtle: #1e293b;
+    --color-border-strong: #334155;
+    --color-text-primary: #f8fafc;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-primary: #3b82f6;
+    --color-primary-hover: #2563eb;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-danger: #ef4444;
+    --radius-tactical: 4px;
+    --radius-tactical-lg: 8px;
+    --shadow-tactical-glow: 0 0 12px rgb(59 130 246 / 30%);
     color-scheme: dark;
-    --command-bg: #051613;
-    --command-surface: #0d1f1b;
-    --command-elevated: #102621;
-    --command-border: #163b33;
-    --command-emerald: #10b981;
-    --command-amber: #f59e0b;
-    --command-crimson: #ef4444;
+    --command-bg: var(--color-surface);
+    --command-surface: var(--color-surface-container);
+    --command-elevated: var(--color-surface-container-high);
+    --command-bg-deep: var(--color-surface-deep);
+    --command-border: var(--color-border-subtle);
+    --command-border-subtle: var(--color-border-strong);
+    --command-primary: var(--color-primary);
+    --command-primary-hover: var(--color-primary-hover);
+    --command-success: var(--color-success);
+    --command-amber: var(--color-warning);
+    --command-crimson: var(--color-danger);
     --command-teal: #14b8a6;
     --command-cyan: #06b6d4;
-    --command-text: #ffffff;
-    --command-secondary: #94a3b8;
-    --command-muted: #64748b;
+    --command-text: var(--color-text-primary);
+    --command-secondary: var(--color-text-secondary);
+    --command-muted: var(--color-text-muted);
 }
 
 html {
@@ -27,6 +45,16 @@ html {
 body {
     min-height: 100vh;
     background: var(--command-bg);
+    color: var(--command-text);
+}
+
+:focus-visible {
+    outline: 2px solid var(--command-primary);
+    outline-offset: 2px;
+}
+
+::selection {
+    background: var(--command-primary);
     color: var(--command-text);
 }
 
@@ -63,14 +91,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-    background: rgba(5, 22, 19, 0.8);
+    background: rgba(5, 20, 36, 0.8);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(16, 185, 129, 0.45);
-    border-radius: 9999px;
+    background: rgba(59, 130, 246, 0.4);
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(16, 185, 129, 0.65);
+    background: rgba(59, 130, 246, 0.6);
 }

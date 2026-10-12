@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
@@ -113,6 +114,11 @@ class DashboardController extends Controller
             'incidentReports' => $incidentReports,
             'userName' => Auth::user()?->name ?? 'Admin',
         ]);
+    }
+
+    public function map(): View
+    {
+        return view('admin.map');
     }
 
     public function weather(Request $request): JsonResponse

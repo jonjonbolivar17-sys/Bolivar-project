@@ -29,6 +29,7 @@ Route::middleware('auth')->group(function () {
     // Admin Dashboard
     Route::middleware('role:admin')->group(function () {
         Route::get('/admin/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
+        Route::get('/admin/map', [DashboardController::class, 'map'])->name('admin.map');
         Route::get('/admin/weather', [DashboardController::class, 'weather'])->name('admin.weather');
     });
 
@@ -44,6 +45,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/reporter/dashboard', function () {
             return view('reporter.dashboard');
         })->name('reporter.dashboard');
+
+        Route::get('/reporter/reports/create', function () {
+            return view('reporter.reports.create');
+        })->name('reporter.reports.create');
 
         Route::get('/user/dashboard', function () {
             return view('reporter.dashboard');

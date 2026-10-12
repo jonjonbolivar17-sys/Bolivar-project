@@ -68,7 +68,7 @@
                         <p x-show="sidebarState === 'expanded' || mobileSidebarOpen" class="px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DB5A5]">RESPONSE &amp; OPERATIONS</p>
 
                         <x-dashboard.sidebar-link label="Emergency Dispatch" href="#" :icon="$sidebarIcon['dispatch']" />
-                        <x-dashboard.sidebar-link label="Analytics &amp; GIS Maps" href="#" :icon="$sidebarIcon['gis']" />
+                        <x-dashboard.sidebar-link label="Analytics &amp; GIS Maps" href="{{ route('admin.map') }}" :icon="$sidebarIcon['gis']" />
                         <x-dashboard.sidebar-link label="Settings" href="#" :icon="$sidebarIcon['settings']" />
                     </nav>
 
