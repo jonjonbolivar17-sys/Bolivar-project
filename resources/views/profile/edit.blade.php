@@ -1,29 +1,27 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Profile') }}
-        </h2>
-    </x-slot>
+@extends('layouts.dashboard')
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="p-4 sm:p-8 bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div class="max-w-xl">
-                    @include('profile.partials.update-profile-information-form')
-                </div>
-            </div>
+@section('title', 'Profile & Settings · AkoHanda')
 
-            <div class="p-4 sm:p-8 bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div class="max-w-xl">
-                    @include('profile.partials.update-password-form')
-                </div>
-            </div>
+@section('content')
+    <x-command-shell title="Profile & Settings">
+        <div class="mx-auto max-w-4xl space-y-6">
+            <header>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-emerald-800">Account</p>
+                <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Profile &amp; Settings</h1>
+                <p class="mt-2 text-sm leading-6 text-slate-600">Update your account details, change your password, or manage your account.</p>
+            </header>
 
-            <div class="p-4 sm:p-8 bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-                <div class="max-w-xl">
-                    @include('profile.partials.delete-user-form')
-                </div>
-            </div>
+            <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                @include('profile.partials.update-profile-information-form')
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                @include('profile.partials.update-password-form')
+            </section>
+
+            <section class="rounded-2xl border border-red-200 bg-white p-5 shadow-sm sm:p-7">
+                @include('profile.partials.delete-user-form')
+            </section>
         </div>
-    </div>
-</x-app-layout>
+    </x-command-shell>
+@endsection

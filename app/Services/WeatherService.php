@@ -27,44 +27,17 @@ class WeatherService
      */
     public function getWeather(): array
     {
-        $city = (string) config('services.weather.city', 'General Santos,PH');
+        $location = $this->getArakanLocation();
 
         try {
-            $locations = $this->getJson(
-                (string) config('services.weather.geocoding_url'),
-                [
-                    'name' => $city,
-                    'count' => 1,
-                    'language' => 'en',
-                    'format' => 'json',
-                ],
-                'location search'
-            );
-            $location = data_get($locations, 'results.0');
-
-            if (! is_array($location)
-                || ! is_numeric(data_get($location, 'latitude'))
-                || ! is_numeric(data_get($location, 'longitude'))) {
-                Log::warning('Open-Meteo could not resolve the configured weather city.', [
-                    'city' => $city,
-                ]);
-
-                return $this->unavailableWeather(
-                    'Open-Meteo could not find the configured city. Check WEATHER_CITY.'
-                );
-            }
-
             $currentWeather = $this->getCurrentWeather(
-                (float) data_get($location, 'latitude'),
-                (float) data_get($location, 'longitude')
+                $location['latitude'],
+                $location['longitude']
             );
-            $country = data_get($location, 'country');
 
             return [
                 'success' => true,
-                'location' => filled($country)
-                    ? data_get($location, 'name').', '.$country
-                    : (string) data_get($location, 'name', $city),
+                'location' => $location['name'].', '.$location['country'],
                 'temperature' => $currentWeather['temperature'],
                 'condition' => $currentWeather['condition'],
                 'humidity' => $currentWeather['humidity'],

@@ -18,16 +18,19 @@ class IncidentReportFactory extends Factory
      */
     public function definition(): array
     {
+        $incidentType = $this->faker->randomElement(['Vehicular Accident', 'Motorcycle Accident', 'Pedestrian Accident', 'Hit and Run', 'Road Obstruction', 'Other']);
+
         return [
             'report_number' => 'REP-'.now()->format('Y').'-'.str_pad((string) $this->faker->unique()->numberBetween(1000, 9999), 4, '0', STR_PAD_LEFT),
             'reporter_id' => User::factory(),
-            'incident_type' => $this->faker->sentence(4),
+            'incident_type' => $incidentType,
             'description' => $this->faker->paragraph(),
             'location' => 'Brgy. '.$this->faker->word().' , Arakan',
             'barangay' => $this->faker->word(),
-            'severity' => $this->faker->randomElement(['low', 'routine', 'moderate', 'high', 'critical']),
+            'severity' => $this->faker->randomElement(['low', 'moderate', 'high', 'critical']),
             'status' => $this->faker->randomElement(['pending', 'under_review', 'assigned', 'in_progress', 'resolved', 'cancelled']),
             'reported_at' => now()->subHours($this->faker->numberBetween(1, 72)),
+            'occurred_at' => now()->subHours($this->faker->numberBetween(1, 72)),
         ];
     }
 }

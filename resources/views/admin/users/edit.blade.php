@@ -1,110 +1,43 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Edit User Privileges · MDRRMO Arakan')
+@section('title', 'Edit User · AkoHanda')
 
 @section('content')
-<x-command-shell active-role="admin" active-route="users" title="Edit User Privileges · MDRRMO Arakan">
-    @php
-        $arakanBarangays = [
-            'Poblacion', 'Greenfield', 'Meocan', 'Doroluman', 'Gambodes', 'Badiangon',
-            'Datu Ladayon', 'Kabalantian', 'Santo Niño', 'San Miguel', 'Maria Caridad',
-            'Kulaman Valley', 'Malibatuan', 'Katipunan', 'Napalico', 'Salasang', 'Dallag',
-            'Anapolon', 'Binoongan', 'Ganatan', 'Kinawayan', 'Libertad', 'Makalangot',
-            'Naje', 'New Rosary', 'Sumalili', 'Tumanding', 'Lanao Kuran'
-        ];
-    @endphp
-
-    <div class="max-w-2xl mx-auto space-y-6">
-        <div class="flex items-center justify-between border-b border-[#163b33] pb-4">
+    <x-command-shell title="Edit User">
+        <div class="mx-auto max-w-2xl space-y-6">
             <div>
-                <a href="{{ route('admin.users.index') }}" class="text-xs font-mono text-emerald-400 hover:underline">← Return to User Directory</a>
-                <h1 class="mt-2 text-2xl font-black tracking-tight text-[#F5FFFC]">Edit Account Privileges</h1>
-                <p class="text-xs text-[#7DB5A5]">Update role credentials &amp; sector postings for {{ $user->name }}</p>
+                <a href="{{ route('admin.users.index') }}" class="text-sm font-semibold text-emerald-900 hover:underline">Back to user management</a>
+                <h1 class="mt-4 text-3xl font-extrabold tracking-tight text-slate-950">Edit user</h1>
+                <p class="mt-2 text-sm text-slate-600">Update {{ $user->name }}’s account details and access role.</p>
             </div>
-            <span class="rounded bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[9px] font-mono text-emerald-300 font-bold">
-                ID #{{ $user->id }}
-            </span>
-        </div>
 
-        <div class="rounded-2xl border border-[#163b33] bg-[#0d1f1b] p-6 shadow-xl">
-            <form method="POST" action="{{ route('admin.users.update', $user) }}" class="space-y-4">
+            <form method="POST" action="{{ route('admin.users.update', $user) }}" class="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
                 @csrf
                 @method('PUT')
-
-                <!-- Name -->
                 <div>
-                    <label for="name" class="block text-[10px] font-mono uppercase text-[#7DB5A5] mb-1">
-                        Full Officer / Citizen Name
-                    </label>
-                    <input
-                        id="name"
-                        name="name"
-                        type="text"
-                        value="{{ old('name', $user->name) }}"
-                        required
-                        class="w-full rounded-xl border border-[#163b33] bg-[#102621] py-2.5 px-3 text-xs md:text-sm text-[#F5FFFC] focus:border-emerald-500 focus:outline-none"
-                    >
-                    @error('name')
-                        <p class="text-xs font-mono text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
+                    <label for="name" class="block text-sm font-bold text-slate-900">Name</label>
+                    <input id="name" name="name" type="text" value="{{ old('name', $user->name) }}" required maxlength="255" autocomplete="name" class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm focus:border-emerald-800 focus:ring-emerald-800">
+                    <x-input-error :messages="$errors->get('name')" class="mt-2" />
                 </div>
-
-                <!-- Email -->
                 <div>
-                    <label for="email" class="block text-[10px] font-mono uppercase text-[#7DB5A5] mb-1">
-                        Official LGU / Email Address
-                    </label>
-                    <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value="{{ old('email', $user->email) }}"
-                        required
-                        class="w-full rounded-xl border border-[#163b33] bg-[#102621] py-2.5 px-3 text-xs md:text-sm text-[#F5FFFC] focus:border-emerald-500 focus:outline-none"
-                    >
-                    @error('email')
-                        <p class="text-xs font-mono text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
+                    <label for="email" class="block text-sm font-bold text-slate-900">Email address</label>
+                    <input id="email" name="email" type="email" value="{{ old('email', $user->email) }}" required maxlength="255" autocomplete="email" class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm focus:border-emerald-800 focus:ring-emerald-800">
+                    <x-input-error :messages="$errors->get('email')" class="mt-2" />
                 </div>
-
-                <!-- Role -->
                 <div>
-                    <label for="role" class="block text-[10px] font-mono uppercase text-[#7DB5A5] mb-1">
-                        System Role &amp; Access Tier
-                    </label>
-                    <select
-                        id="role"
-                        name="role"
-                        required
-                        class="w-full rounded-xl border border-[#163b33] bg-[#102621] py-2.5 px-3 text-xs md:text-sm text-[#F5FFFC] focus:border-emerald-500 focus:outline-none"
-                    >
-                        <option value="admin" {{ old('role', $user->role) === 'admin' ? 'selected' : '' }}>Command Center Admin</option>
-                        <option value="staff" {{ old('role', $user->role) === 'staff' ? 'selected' : '' }}>Field Staff / Responder</option>
-                        <option value="reporter" {{ old('role', $user->role) === 'reporter' ? 'selected' : '' }}>Citizen Reporter</option>
+                    <label for="role" class="block text-sm font-bold text-slate-900">Role</label>
+                    <select id="role" name="role" required class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm focus:border-emerald-800 focus:ring-emerald-800">
+                        <option value="admin" @selected(old('role', $user->role) === 'admin')>Administrator</option>
+                        <option value="staff" @selected(old('role', $user->role) === 'staff')>Staff</option>
+                        <option value="reporter" @selected(old('role', $user->role) === 'reporter')>Reporter</option>
                     </select>
-                    @error('role')
-                        <p class="text-xs font-mono text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
+                    <x-input-error :messages="$errors->get('role')" class="mt-2" />
                 </div>
-
-                <!-- Buttons -->
-                <div class="flex items-center justify-end gap-3 pt-4 border-t border-[#163b33]">
-                    <a
-                        href="{{ route('admin.users.index') }}"
-                        class="rounded-xl border border-[#163b33] bg-[#102621] px-4 py-2.5 text-xs text-[#7DB5A5] hover:text-[#F5FFFC] transition"
-                    >
-                        Cancel
-                    </a>
-
-                    <button
-                        type="submit"
-                        class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-[#051613] hover:bg-emerald-500 transition shadow-lg"
-                    >
-                        Save Privileges
-                    </button>
+                <div class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+                    <a href="{{ route('admin.users.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</a>
+                    <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-900 px-5 py-2 text-sm font-bold text-white transition hover:bg-emerald-800">Save changes</button>
                 </div>
             </form>
         </div>
-    </div>
-</x-command-shell>
+    </x-command-shell>
 @endsection

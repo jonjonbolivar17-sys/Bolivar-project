@@ -1,114 +1,115 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Report Incident · AkoHanda')
+@section('title', 'Submit Accident Report · AkoHanda')
 
 @section('content')
-    <x-command-shell active-role="citizen" active-route="citizen" title="Citizen Incident Intake · MDRRMO Arakan">
-        <div class="space-y-6 p-4 md:p-6">
-            <div class="rounded-3xl border border-[#163b33] bg-[#0d1f1b] p-5 shadow-2xl">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-950/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-red-300">
-                            <span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>
-                            Immediate Safety
-                        </span>
-                        <h1 class="mt-3 text-3xl font-black tracking-tight text-[#F5FFFC]">Report an Accident / Hazard</h1>
-                        <p class="mt-2 text-sm text-[#7DB5A5]">Follow the 5 W’s to send emergency context to the ARAKAN dispatch desk.</p>
-                    </div>
-
-                    <a href="tel:0645218899" class="inline-flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-950/60 px-4 py-2.5 text-sm font-semibold text-red-200 transition hover:bg-red-900/60">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                        Call 911 Hotline
-                    </a>
-                </div>
+    <x-command-shell title="Submit Accident Report">
+        <div class="mx-auto max-w-3xl space-y-6">
+            <div>
+                <a href="{{ route('reporter.dashboard') }}" class="text-sm font-semibold text-emerald-900 hover:underline">← Back to dashboard</a>
+                <h1 class="mt-4 text-3xl font-extrabold tracking-tight text-slate-950">Submit an accident report</h1>
+                <p class="mt-2 text-sm leading-6 text-slate-600">Describe the incident as clearly as you can. Location sharing is optional; you can enter a location manually instead.</p>
             </div>
 
-            <div class="rounded-3xl border border-[#163b33] bg-[#0d1f1b] p-5 shadow-xl">
-                <div class="mb-6 flex items-center justify-between">
+            @if ($categories->isEmpty())
+                <div role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                    Incident categories are not available yet. Please contact an administrator before submitting a report.
+                </div>
+            @else
+                <form method="POST" action="{{ route('reporter.reports.store') }}" enctype="multipart/form-data" x-data="{ submitting: false, gpsState: 'idle', gpsMessage: '', latitude: @js(old('latitude', '')), longitude: @js(old('longitude', '')) }" @submit="submitting = true" class="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                    @csrf
+
                     <div>
-                        <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300">Step progress</p>
-                        <h2 class="mt-2 text-xl font-bold text-[#F5FFFC]">Five W’s Intake Protocol</h2>
-                    </div>
-                    <div class="font-mono text-xs text-[#7DB5A5]">STEP 1 OF 5</div>
-                </div>
-
-                <div class="mb-6 grid gap-3 md:grid-cols-5">
-                    @foreach (['What', 'Where', 'When', 'Who', 'Witness'] as $step)
-                        <div class="rounded-2xl border {{ $loop->first ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300' : 'border-[#163b33] bg-[#102621] text-[#7DB5A5]' }} p-3">
-                            <div class="text-[10px] font-semibold uppercase tracking-[0.2em]">{{ $step }}</div>
-                        </div>
-                    @endforeach
-                </div>
-
-                <form class="space-y-6">
-                    <div class="grid gap-6 lg:grid-cols-2">
-                        <div class="space-y-5">
-                            <div>
-                                <label class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DB5A5]">Incident classification</label>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    @foreach (['Two-Vehicle Collision', 'Motorcycle', 'Pedestrian', 'Hit & Run', 'Fender Bender'] as $type)
-                                        <button type="button" class="rounded-full border border-[#163b33] bg-[#102621] px-3 py-2 text-xs font-medium text-[#F5FFFC] {{ $loop->first ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300' : '' }}">
-                                            {{ $type }}
-                                        </button>
-                                    @endforeach
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="severity" class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DB5A5]">Severity</label>
-                                <input id="severity" type="range" min="1" max="3" value="2" class="mt-3 w-full accent-emerald-500">
-                                <div class="mt-2 flex justify-between text-[10px] uppercase tracking-[0.18em] text-[#7DB5A5]">
-                                    <span>Minor</span>
-                                    <span>Moderate</span>
-                                    <span>Severe</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="space-y-5">
-                            <div>
-                                <label class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DB5A5]">Location</label>
-                                <div class="mt-3 rounded-2xl border border-[#163b33] bg-[#102621] p-3">
-                                    <div class="font-mono text-sm text-emerald-300">14.583921° N, 121.057744° E</div>
-                                    <div class="mt-2 text-sm text-[#F5FFFC]">Brgy. Greenfield, Purok 3, Arakan</div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="when" class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DB5A5]">When did this happen?</label>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    <button type="button" class="rounded-full border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-300">Happened Just Now</button>
-                                    <input id="when" type="datetime-local" class="w-full rounded-xl border border-[#163b33] bg-[#102621] px-3 py-2 text-sm text-[#F5FFFC] placeholder:text-[#7DB5A5]">
-                                </div>
-                            </div>
-                        </div>
+                        <label for="incident_category_id" class="block text-sm font-bold text-slate-900">Incident category <span class="text-red-700" aria-hidden="true">*</span></label>
+                        <select id="incident_category_id" name="incident_category_id" required class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800">
+                            <option value="">Choose a category</option>
+                            @foreach ($categories as $category)
+                                <option value="{{ $category->id }}" @selected(old('incident_category_id') == $category->id)>{{ $category->name }}</option>
+                            @endforeach
+                        </select>
+                        <x-input-error :messages="$errors->get('incident_category_id')" class="mt-2" />
                     </div>
 
-                    <div class="grid gap-6 lg:grid-cols-2">
+                    <div class="grid gap-5 sm:grid-cols-2">
                         <div>
-                            <label for="context" class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DB5A5]">Who and context</label>
-                            <textarea id="context" rows="6" class="mt-3 w-full rounded-2xl border border-[#163b33] bg-[#102621] px-4 py-3 text-sm text-[#F5FFFC] placeholder:text-[#7DB5A5]" placeholder="Describe the parties involved, injuries, road conditions, and any immediate hazards."></textarea>
+                            <label for="occurred_at" class="block text-sm font-bold text-slate-900">Date and time of incident <span class="text-red-700" aria-hidden="true">*</span></label>
+                            <input id="occurred_at" name="occurred_at" type="datetime-local" max="{{ now()->format('Y-m-d\TH:i') }}" value="{{ old('occurred_at') }}" required class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800">
+                            <x-input-error :messages="$errors->get('occurred_at')" class="mt-2" />
                         </div>
-
                         <div>
-                            <label class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7DB5A5]">Evidence upload</label>
-                            <div class="mt-3 rounded-2xl border border-dashed border-[#163b33] bg-[#102621] p-4">
-                                <div class="flex h-32 items-center justify-center rounded-xl border border-[#163b33] bg-[#081d1a] text-sm text-[#7DB5A5]">
-                                    Drag & drop photos or dashcam footage here
-                                </div>
-                            </div>
-                            <div class="mt-4 rounded-xl border border-[#163b33] bg-[#0d1f1b] p-3 text-xs text-[#7DB5A5]">
-                                EXIF metadata and cloud staging will be extracted automatically after upload.
-                            </div>
+                            <label for="severity" class="block text-sm font-bold text-slate-900">Severity <span class="text-red-700" aria-hidden="true">*</span></label>
+                            <select id="severity" name="severity" required class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800">
+                                @foreach (['low' => 'Low', 'moderate' => 'Moderate', 'high' => 'High', 'critical' => 'Critical'] as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('severity', 'moderate') === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            <x-input-error :messages="$errors->get('severity')" class="mt-2" />
                         </div>
                     </div>
 
-                    <div class="flex flex-col gap-3 border-t border-[#163b33] pt-5 sm:flex-row sm:justify-between">
-                        <a href="{{ route('reporter.dashboard') }}" class="inline-flex items-center justify-center rounded-xl border border-[#163b33] bg-[#102621] px-4 py-2.5 text-sm font-semibold text-[#F5FFFC]">Back to dashboard</a>
-                        <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500 px-5 py-2.5 text-sm font-bold text-[#051613] shadow-[0_0_20px_rgba(16,185,129,0.25)]">Submit report</button>
+                    <div>
+                        <label for="description" class="block text-sm font-bold text-slate-900">What happened? <span class="text-red-700" aria-hidden="true">*</span></label>
+                        <textarea id="description" name="description" rows="5" required minlength="10" maxlength="10000" aria-describedby="description-help" class="mt-2 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800" placeholder="Include relevant details such as what happened and any immediate hazards.">{{ old('description') }}</textarea>
+                        <p id="description-help" class="mt-1 text-xs text-slate-500">10–10,000 characters. Do not include information you do not want shared with authorized reviewers.</p>
+                        <x-input-error :messages="$errors->get('description')" class="mt-2" />
+                    </div>
+
+                    <div>
+                        <label for="persons_involved" class="block text-sm font-bold text-slate-900">People involved <span class="font-normal text-slate-500">(optional)</span></label>
+                        <textarea id="persons_involved" name="persons_involved" rows="3" maxlength="5000" class="mt-2 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800" placeholder="Names or a brief description, if known.">{{ old('persons_involved') }}</textarea>
+                        <x-input-error :messages="$errors->get('persons_involved')" class="mt-2" />
+                    </div>
+
+                    <fieldset class="space-y-4 rounded-xl border border-slate-200 p-4 sm:p-5">
+                        <legend class="px-1 text-sm font-bold text-slate-900">Incident location</legend>
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p class="text-sm leading-6 text-slate-600">Choose GPS only if you want to share your current device location. You can provide an address without using GPS.</p>
+                            <button type="button" @click="if (!navigator.geolocation) { gpsState = 'error'; gpsMessage = 'Location is not supported by this browser. You can enter the location manually.'; return; } gpsState = 'loading'; gpsMessage = 'Requesting location permission…'; navigator.geolocation.getCurrentPosition(position => { latitude = position.coords.latitude.toFixed(7); longitude = position.coords.longitude.toFixed(7); gpsState = 'success'; gpsMessage = 'Coordinates captured from your device.'; }, error => { gpsState = 'error'; gpsMessage = error.code === 1 ? 'Permission was denied. You can enter the location manually.' : error.code === 2 ? 'Your location is unavailable. You can enter it manually.' : 'Location request timed out. You can enter it manually.'; }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });" :disabled="gpsState === 'loading'" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-emerald-800 px-4 py-2 text-sm font-bold text-emerald-950 transition hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60">
+                                <span x-show="gpsState !== 'loading'">Use my location</span>
+                                <span x-show="gpsState === 'loading'" x-cloak>Getting location…</span>
+                            </button>
+                        </div>
+                        <p x-show="gpsMessage" x-cloak aria-live="polite" class="text-sm" :class="gpsState === 'error' ? 'text-red-800' : 'text-emerald-900'" x-text="gpsMessage"></p>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="location" class="block text-sm font-bold text-slate-900">Address or place description <span class="text-red-700" aria-hidden="true">*</span></label>
+                                <input id="location" name="location" type="text" value="{{ old('location') }}" required maxlength="255" class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800" placeholder="Road, purok, landmark, or nearby location">
+                                <x-input-error :messages="$errors->get('location')" class="mt-2" />
+                            </div>
+                            <div>
+                                <label for="barangay" class="block text-sm font-bold text-slate-900">Barangay <span class="font-normal text-slate-500">(optional)</span></label>
+                                <input id="barangay" name="barangay" type="text" value="{{ old('barangay') }}" maxlength="255" class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800" placeholder="Barangay name">
+                                <x-input-error :messages="$errors->get('barangay')" class="mt-2" />
+                            </div>
+                            <div>
+                                <label for="latitude" class="block text-sm font-bold text-slate-900">Latitude <span class="font-normal text-slate-500">(optional)</span></label>
+                                <input id="latitude" name="latitude" type="number" step="any" min="-90" max="90" x-model="latitude" class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800" placeholder="GPS latitude or manual value">
+                                <x-input-error :messages="$errors->get('latitude')" class="mt-2" />
+                            </div>
+                            <div>
+                                <label for="longitude" class="block text-sm font-bold text-slate-900">Longitude <span class="font-normal text-slate-500">(optional)</span></label>
+                                <input id="longitude" name="longitude" type="number" step="any" min="-180" max="180" x-model="longitude" class="mt-2 min-h-11 w-full rounded-lg border-slate-300 text-sm text-slate-900 focus:border-emerald-800 focus:ring-emerald-800" placeholder="GPS longitude or manual value">
+                                <x-input-error :messages="$errors->get('longitude')" class="mt-2" />
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <div>
+                        <label for="evidence" class="block text-sm font-bold text-slate-900">Photo evidence <span class="font-normal text-slate-500">(optional)</span></label>
+                        <input id="evidence" name="evidence" type="file" accept="image/jpeg,image/png,image/webp" class="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 text-sm text-slate-700 file:mr-4 file:min-h-11 file:border-0 file:bg-slate-100 file:px-4 file:text-sm file:font-bold file:text-slate-800">
+                        <p class="mt-1 text-xs text-slate-500">JPEG, PNG, or WebP image up to 10 MB. Evidence is stored privately and only served to authorized viewers.</p>
+                        <x-input-error :messages="$errors->get('evidence')" class="mt-2" />
+                    </div>
+
+                    <div class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+                        <a href="{{ route('reporter.dashboard') }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50">Cancel</a>
+                        <button type="submit" :disabled="submitting" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-red-700 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 disabled:cursor-wait disabled:opacity-60">
+                            <span x-show="!submitting">Submit report</span>
+                            <span x-show="submitting" x-cloak>Submitting…</span>
+                        </button>
                     </div>
                 </form>
-            </div>
+            @endif
         </div>
     </x-command-shell>
 @endsection

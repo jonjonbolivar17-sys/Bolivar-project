@@ -16,7 +16,7 @@
             <div class="h-10 w-10 mx-auto rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                 <span class="animate-spin text-lg">⏳</span>
             </div>
-            <h2 class="text-lg font-bold text-[#F5FFFC]">Connecting to MDRRMO Arakan Command Portal...</h2>
+            <h2 class="text-lg font-bold text-[#F5FFFC]">Loading your dashboard...</h2>
             <p class="text-xs text-[#7DB5A5]">Redirecting based on your assigned municipal access tier.</p>
         </div>
     </div>

@@ -1,18 +1,28 @@
 @props([
     'tone' => 'neutral',
-    'label' => 'Status',
+    'label' => null,
+    'status' => null,
 ])
 
 @php
-    $classes = match ($tone) {
-        'warning' => 'border border-[#F5B700]/25 bg-[#F5B700]/10 text-[#F6D36A]',
-        'teal' => 'border border-[#19D3AE]/25 bg-[#19D3AE]/10 text-[#8EF2D0]',
-        'green' => 'border border-[#19D3AE]/30 bg-[#19D3AE]/10 text-[#9EF2D4]',
-        'cyan' => 'border border-[#00C8FF]/25 bg-[#00C8FF]/10 text-[#A8F0FF]',
-        default => 'border border-[#00B894]/20 bg-[#00382D]/80 text-[#D9FFF5]',
+    $displayLabel = $label ?? ($status ? ucwords(str_replace('_', ' ', $status)) : 'Status');
+    $statusTone = match ($status) {
+        'pending', 'under_review' => 'warning',
+        'assigned', 'in_progress' => 'cyan',
+        'resolved' => 'green',
+        'cancelled' => 'red',
+        default => $tone,
+    };
+    $classes = match ($statusTone) {
+        'warning' => 'border-amber-200 bg-amber-50 text-amber-900',
+        'teal', 'green' => 'border-emerald-200 bg-emerald-50 text-emerald-900',
+        'cyan' => 'border-sky-200 bg-sky-50 text-sky-900',
+        'red' => 'border-red-200 bg-red-50 text-red-900',
+        default => 'border-slate-200 bg-slate-100 text-slate-800',
     };
 @endphp
 
-<span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] {{ $classes }}">
-    {{ $label }}
+<span class="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-bold {{ $classes }}">
+    <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>
+    {{ $displayLabel }}
 </span>

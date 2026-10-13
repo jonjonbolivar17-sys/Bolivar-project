@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\SystemLog;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Illuminate\View\View;
 
@@ -17,31 +19,24 @@ class UserController extends Controller
      */
     public function index(Request $request): View
     {
-        $query = User::query();
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'role' => ['nullable', Rule::in(['admin', 'staff', 'reporter'])],
+        ]);
 
-        if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
+        $users = User::query()
+            ->when($validated['search'] ?? null, function ($query, string $search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->when($validated['role'] ?? null, fn ($query, string $role) => $query->where('role', $role))
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
 
-        if ($request->filled('role') && in_array($request->input('role'), ['admin', 'staff', 'reporter'])) {
-            $query->where('role', $request->input('role'));
-        }
-
-        $users = $query->latest()->paginate(15)->withQueryString();
-
-        $barangays = [
-            'Poblacion', 'Greenfield', 'Meocan', 'Doroluman', 'Gambodes', 'Badiangon',
-            'Datu Ladayon', 'Kabalantian', 'Santo Niño', 'San Miguel', 'Maria Caridad',
-            'Kulaman Valley', 'Malibatuan', 'Katipunan', 'Napalico', 'Salasang', 'Dallag',
-            'Anapolon', 'Binoongan', 'Ganatan', 'Kinawayan', 'Libertad', 'Makalangot',
-            'Naje', 'New Rosary', 'Sumalili', 'Tumanding', 'Lanao Kuran',
-        ];
-
-        return view('admin.users.index', compact('users', 'barangays'));
+        return view('admin.users.index', compact('users'));
     }
 
     /**
@@ -64,24 +59,23 @@ class UserController extends Controller
             'role' => ['required', 'in:admin,staff,reporter'],
         ]);
 
-        User::create([
+        $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
         ]);
 
+        SystemLog::query()->create([
+            'user_id' => $request->user()->id,
+            'action' => 'user_created',
+            'description' => "Created {$validated['role']} account {$user->email}.",
+            'ip_address' => $request->ip(),
+        ]);
+
         return redirect()
             ->route('admin.users.index')
             ->with('success', 'User created successfully.');
-    }
-
-    /**
-     * Show a specific user.
-     */
-    public function show(User $user): View
-    {
-        return view('admin.users.show', compact('user'));
     }
 
     /**
@@ -116,6 +110,13 @@ class UserController extends Controller
             'role' => $validated['role'],
         ]);
 
+        SystemLog::query()->create([
+            'user_id' => $request->user()->id,
+            'action' => 'user_updated',
+            'description' => "Updated account {$user->email} and assigned the {$user->role} role.",
+            'ip_address' => $request->ip(),
+        ]);
+
         return redirect()
             ->route('admin.users.index')
             ->with('success', 'User updated successfully.');
@@ -124,11 +125,26 @@ class UserController extends Controller
     /**
      * Delete a user.
      */
-    public function destroy(User $user): RedirectResponse
+    public function destroy(Request $request, User $user): RedirectResponse
     {
-        if ($user->id === auth()->id()) {
+        if ($user->id === $request->user()->id) {
             return back()->with('error', 'You cannot delete your own account.');
         }
+
+        if (
+            $user->incidentReports()->exists()
+            || $user->responders()->exists()
+            || $user->dispatches()->exists()
+        ) {
+            return back()->with('error', 'This account is linked to incident or responder records and cannot be deleted. Change its role instead.');
+        }
+
+        SystemLog::query()->create([
+            'user_id' => $request->user()->id,
+            'action' => 'user_deleted',
+            'description' => "Deleted account {$user->email}.",
+            'ip_address' => $request->ip(),
+        ]);
 
         $user->delete();
 

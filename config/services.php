@@ -36,8 +36,6 @@ return [
     ],
 
     'weather' => [
-        'city' => env('WEATHER_CITY', 'General Santos,PH'),
-        'geocoding_url' => 'https://geocoding-api.open-meteo.com/v1/search',
         'url' => 'https://api.open-meteo.com/v1/forecast',
         'location' => [
             'name' => env('WEATHER_LOCATION_NAME', 'Arakan, Cotabato'),

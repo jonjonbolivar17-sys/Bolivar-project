@@ -11,6 +11,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -27,7 +28,8 @@ class DashboardController extends Controller
         $staff = User::where('role', 'staff')->count();
         $reporters = User::where('role', 'reporter')->count();
         $totalReports = IncidentReport::count();
-        $pendingReports = IncidentReport::whereIn('status', ['pending', 'under_review', 'assigned', 'in_progress'])->count();
+        $pendingReports = IncidentReport::whereIn('status', ['pending', 'under_review'])->count();
+        $inProgressReports = IncidentReport::whereIn('status', ['assigned', 'in_progress'])->count();
         $resolvedReports = IncidentReport::where('status', 'resolved')->count();
         $fieldResponders = Responder::count();
 
@@ -70,9 +72,16 @@ class DashboardController extends Controller
             [
                 'label' => 'PENDING REPORTS',
                 'value' => (string) $pendingReports,
-                'meta' => 'Needs review or dispatch',
+                'meta' => 'Awaiting review',
                 'tone' => 'warning',
                 'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
+            ],
+            [
+                'label' => 'IN PROGRESS',
+                'value' => (string) $inProgressReports,
+                'meta' => 'Assigned or being handled',
+                'tone' => 'teal',
+                'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4m0 10v4M3 12h4m10 0h4"/><circle cx="12" cy="12" r="6"/></svg>',
             ],
             [
                 'label' => 'RESOLVED REPORTS',
@@ -91,22 +100,10 @@ class DashboardController extends Controller
         ];
 
         $incidentReports = IncidentReport::query()
-            ->with('reporter')
+            ->with(['reporter', 'category'])
             ->latest('reported_at')
-            ->limit(4)
-            ->get()
-            ->map(function (IncidentReport $incident) {
-                return [
-                    'id' => '#'.$incident->report_number,
-                    'title' => $incident->incident_type,
-                    'location' => $incident->barangay ?? $incident->location,
-                    'time' => $incident->reported_at?->diffForHumans(),
-                    'severity' => ucfirst((string) $incident->severity),
-                    'status' => ucfirst(str_replace('_', ' ', (string) $incident->status)),
-                    'action' => $incident->status === 'resolved' ? 'View Log' : 'Assign Unit',
-                ];
-            })
-            ->all();
+            ->limit(5)
+            ->get();
 
         return view('admin.dashboard', [
             'weather' => $weather,
@@ -118,7 +115,21 @@ class DashboardController extends Controller
 
     public function map(): View
     {
-        return view('admin.map');
+        $locationTrackingAvailable = Schema::hasColumn('incident_reports', 'latitude')
+            && Schema::hasColumn('incident_reports', 'longitude');
+
+        $locationReports = $locationTrackingAvailable
+            ? IncidentReport::query()
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude')
+                ->latest('reported_at')
+                ->paginate(10)
+            : null;
+
+        return view('admin.map', [
+            'locationReports' => $locationReports,
+            'locationTrackingAvailable' => $locationTrackingAvailable,
+        ]);
     }
 
     public function weather(Request $request): JsonResponse

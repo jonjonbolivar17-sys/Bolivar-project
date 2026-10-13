@@ -7,22 +7,12 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
 
-it('renders city weather on the admin dashboard', function () {
-    config()->set('services.weather.city', 'General Santos,PH');
-
+it('renders Arakan weather on the admin dashboard', function () {
     Http::preventStrayRequests();
     Http::fake([
-        'geocoding-api.open-meteo.com/v1/search*' => Http::response([
-            'results' => [[
-                'name' => 'General Santos',
-                'country' => 'Philippines',
-                'latitude' => 6.1164,
-                'longitude' => 125.1716,
-            ]],
-        ]),
         'api.open-meteo.com/v1/forecast*' => Http::response([
-            'latitude' => 6.1,
-            'longitude' => 125.2,
+            'latitude' => 7.35,
+            'longitude' => 125.08,
             'current' => [
                 'time' => '2026-10-06T17:00',
                 'temperature_2m' => 28.56,
@@ -43,11 +33,11 @@ it('renders city weather on the admin dashboard', function () {
         ->get('/admin/dashboard')
         ->assertOk()
         ->assertSeeText('AkoHanda')
-        ->assertSeeText('Municipality of Arakan')
+        ->assertSeeText('System overview')
         ->assertSeeText('Welcome, Admin User!')
         ->assertSeeText('Current Weather')
         ->assertSeeText('AVAILABLE')
-        ->assertSeeText('General Santos')
+        ->assertSeeText('Arakan, Cotabato')
         ->assertSeeText('Philippines')
         ->assertSeeText('28.6 °C')
         ->assertSeeText('Partly cloudy')
@@ -55,19 +45,11 @@ it('renders city weather on the admin dashboard', function () {
         ->assertSeeText('3.4 m/s')
         ->assertSeeText('Open-Meteo');
 
-    Http::assertSent(fn (ClientRequest $request): bool => str_contains($request->url(), 'geocoding-api.open-meteo.com')
-        && $request->method() === 'GET'
-        && $request->data() === [
-            'name' => 'General Santos,PH',
-            'count' => 1,
-            'language' => 'en',
-            'format' => 'json',
-        ]);
     Http::assertSent(fn (ClientRequest $request): bool => str_contains($request->url(), 'api.open-meteo.com')
         && $request->method() === 'GET'
         && $request->data() === [
-            'latitude' => 6.1164,
-            'longitude' => 125.1716,
+            'latitude' => 7.3521621,
+            'longitude' => 125.1282103,
             'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
             'wind_speed_unit' => 'ms',
             'timezone' => 'auto',
@@ -174,17 +156,42 @@ it('renders a fallback when Open-Meteo returns malformed JSON', function () {
         ->assertSeeText('Open-Meteo returned invalid JSON for current weather.');
 });
 
-it('renders an informative error when the configured city cannot be found', function () {
+it('uses the configured Arakan coordinates without a geocoding lookup', function () {
     Http::preventStrayRequests();
     Http::fake([
-        'geocoding-api.open-meteo.com/v1/search*' => Http::response(['results' => []]),
+        'api.open-meteo.com/v1/forecast*' => Http::response([
+            'latitude' => 7.3521621,
+            'longitude' => 125.1282103,
+            'current' => [
+                'time' => '2026-10-06T17:00',
+                'temperature_2m' => 28.6,
+                'relative_humidity_2m' => 78,
+                'apparent_temperature' => 30.1,
+                'weather_code' => 2,
+                'wind_speed_10m' => 3.4,
+            ],
+        ]),
     ]);
 
     $user = User::factory()->create(['role' => 'admin']);
 
     $this->actingAs($user)
         ->get('/admin/dashboard')
-        ->assertSeeText('Open-Meteo could not find the configured city.');
+        ->assertOk()
+        ->assertSeeText('Current Weather')
+        ->assertSeeText('Arakan, Cotabato')
+        ->assertSeeText('Philippines')
+        ->assertSeeText('28.6 °C');
+
+    Http::assertSent(fn (ClientRequest $request): bool => str_contains($request->url(), 'api.open-meteo.com')
+        && $request->method() === 'GET'
+        && $request->data() === [
+            'latitude' => 7.3521621,
+            'longitude' => 125.1282103,
+            'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
+            'wind_speed_unit' => 'ms',
+            'timezone' => 'auto',
+        ]);
 });
 
 it('returns weather for the submitted browser coordinates', function () {
@@ -295,7 +302,7 @@ it('calculates dashboard statistics from the database', function () {
     IncidentReport::factory()->create([
         'report_number' => 'REP-2024-0890',
         'status' => 'in_progress',
-        'severity' => 'routine',
+        'severity' => 'high',
     ]);
     IncidentReport::factory()->create([
         'report_number' => 'REP-2024-0889',
@@ -311,10 +318,12 @@ it('calculates dashboard statistics from the database', function () {
         ->assertViewHas('stats', function ($stats) {
             $totalReports = collect($stats)->firstWhere('label', 'TOTAL REPORTS');
             $pendingReports = collect($stats)->firstWhere('label', 'PENDING REPORTS');
+            $inProgressReports = collect($stats)->firstWhere('label', 'IN PROGRESS');
             $resolvedReports = collect($stats)->firstWhere('label', 'RESOLVED REPORTS');
 
             return $totalReports['value'] === '3'
-                && $pendingReports['value'] === '2'
+                && $pendingReports['value'] === '1'
+                && $inProgressReports['value'] === '1'
                 && $resolvedReports['value'] === '1';
         });
 });

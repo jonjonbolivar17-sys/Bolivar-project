@@ -20,32 +20,40 @@
     --radius-tactical-lg: 8px;
     --shadow-tactical-glow: 0 0 12px rgb(59 130 246 / 30%);
     color-scheme: dark;
-    --command-bg: var(--color-surface);
-    --command-surface: var(--color-surface-container);
-    --command-elevated: var(--color-surface-container-high);
-    --command-bg-deep: var(--color-surface-deep);
-    --command-border: var(--color-border-subtle);
-    --command-border-subtle: var(--color-border-strong);
-    --command-primary: var(--color-primary);
-    --command-primary-hover: var(--color-primary-hover);
-    --command-success: var(--color-success);
-    --command-amber: var(--color-warning);
-    --command-crimson: var(--color-danger);
+    --command-bg: #061c1a;
+    --command-surface: #0d1f1b;
+    --command-elevated: #102f2a;
+    --command-bg-deep: #041510;
+    --command-border: rgba(148, 163, 184, 0.18);
+    --command-border-subtle: rgba(16, 185, 129, 0.28);
+    --command-primary: #10b981;
+    --command-primary-hover: #34d399;
+    --command-success: #34d399;
+    --command-amber: #fbbf24;
+    --command-crimson: #ef4444;
     --command-teal: #14b8a6;
     --command-cyan: #06b6d4;
-    --command-text: var(--color-text-primary);
-    --command-secondary: var(--color-text-secondary);
-    --command-muted: var(--color-text-muted);
+    --command-text: #f8fafc;
+    --command-secondary: #bfdbd8;
+    --command-muted: #8ba49d;
 }
 
 html {
-    background: var(--command-bg);
+    background: linear-gradient(180deg, #061c1a 0%, #041510 100%);
 }
 
 body {
     min-height: 100vh;
-    background: var(--command-bg);
+    background:
+        radial-gradient(circle at top left, rgba(16, 185, 129, 0.18), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(14, 116, 144, 0.18), transparent 25%),
+        linear-gradient(180deg, #061c1a 0%, #041510 100%);
     color: var(--command-text);
+}
+
+.landing-page {
+    background: #f7faf9;
+    color: #0f172a;
 }
 
 :focus-visible {
@@ -56,6 +64,10 @@ body {
 ::selection {
     background: var(--command-primary);
     color: var(--command-text);
+}
+
+[x-cloak] {
+    display: none !important;
 }
 
 .command-reveal {
@@ -91,14 +103,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-    background: rgba(5, 20, 36, 0.8);
+    background: rgba(4, 21, 16, 0.8);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(59, 130, 246, 0.4);
+    background: rgba(16, 185, 129, 0.4);
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(59, 130, 246, 0.6);
+    background: rgba(16, 185, 129, 0.6);
 }
