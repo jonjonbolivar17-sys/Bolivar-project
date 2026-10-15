@@ -7,7 +7,6 @@ use App\Models\IncidentReport;
 use App\Models\Responder;
 use App\Models\User;
 use App\Services\WeatherService;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,8 +20,6 @@ class DashboardController extends Controller
 
     public function index()
     {
-        $weather = $this->weatherService->getWeather();
-
         $totalUsers = User::count();
         $admins = User::where('role', 'admin')->count();
         $staff = User::where('role', 'staff')->count();
@@ -106,7 +103,6 @@ class DashboardController extends Controller
             ->get();
 
         return view('admin.dashboard', [
-            'weather' => $weather,
             'stats' => $stats,
             'incidentReports' => $incidentReports,
             'userName' => Auth::user()?->name ?? 'Admin',
@@ -134,26 +130,47 @@ class DashboardController extends Controller
 
     public function weather(Request $request): JsonResponse
     {
-        $location = $this->weatherService->getArakanLocation();
-
         try {
-            $latitude = $request->input('latitude', $location['latitude']);
-            $longitude = $request->input('longitude', $location['longitude']);
-
             $validated = $request->validate([
-                'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-                'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+                'search' => ['sometimes', 'string', 'min:2', 'max:120'],
+                'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+                'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
+                'location_name' => ['nullable', 'string', 'max:120'],
+                'state' => ['nullable', 'string', 'max:120'],
+                'country' => ['nullable', 'string', 'max:120'],
+                'country_code' => ['nullable', 'string', 'size:2'],
+                'reverse_geocode' => ['sometimes', 'boolean'],
+                'explicit_search' => ['sometimes', 'boolean'],
             ]);
 
-            $latitude = $validated['latitude'] ?? $location['latitude'];
-            $longitude = $validated['longitude'] ?? $location['longitude'];
-
-            $weather = $this->weatherService->getCurrentWeather((float) $latitude, (float) $longitude);
-
-            if (! isset($validated['latitude']) && ! isset($validated['longitude'])) {
-                $weather['location'] = $location['name'];
-                $weather['country'] = $location['country'];
+            if (isset($validated['search'])) {
+                return response()->json([
+                    'success' => true,
+                    'locations' => $this->weatherService->searchLocations(
+                        $validated['search'],
+                        (bool) ($validated['explicit_search'] ?? false)
+                    ),
+                ]);
             }
+
+            if (! isset($validated['latitude'], $validated['longitude'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Search for a location or provide both latitude and longitude.',
+                ], 422);
+            }
+
+            $latitude = (float) $validated['latitude'];
+            $longitude = (float) $validated['longitude'];
+            $weather = $this->weatherService->getCurrentWeather(
+                $latitude,
+                $longitude,
+                $validated['location_name'] ?? null,
+                $validated['state'] ?? null,
+                $validated['country'] ?? null,
+                $validated['country_code'] ?? null,
+                (bool) ($validated['reverse_geocode'] ?? false)
+            );
 
             return response()->json([
                 'success' => true,
@@ -162,26 +179,19 @@ class DashboardController extends Controller
         } catch (ValidationException $exception) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid latitude or longitude provided.',
+                'message' => 'Enter a valid location or coordinate pair.',
             ], 422);
         } catch (\InvalidArgumentException $exception) {
             return response()->json([
                 'success' => false,
                 'message' => $exception->getMessage(),
             ], 422);
-        } catch (\Throwable $exception) {
+        } catch (\RuntimeException $exception) {
             report($exception);
-            $message = match (true) {
-                $exception instanceof ConnectionException
-                    && str_contains(strtolower($exception->getMessage()), 'timed out') => 'Weather service timed out. Please try again.',
-                $exception instanceof ConnectionException => 'Could not connect to Open-Meteo. Check the server network connection.',
-                $exception instanceof \RuntimeException => $exception->getMessage(),
-                default => 'Could not retrieve weather from Open-Meteo. Check the application logs.',
-            };
 
             return response()->json([
                 'success' => false,
-                'message' => $message,
+                'message' => $exception->getMessage(),
             ], 503);
         }
     }

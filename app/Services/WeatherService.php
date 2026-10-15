@@ -2,332 +2,658 @@
 
 namespace App\Services;
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
-use Throwable;
 
 class WeatherService
 {
     /**
-     * @return array{
-     *     success: false,
-     *     message: string
-     * }|array{
-     *     success: true,
-     *     location: string,
-     *     temperature: float,
-     *     condition: string,
-     *     humidity: int,
-     *     wind_speed: float
-     * }
-     */
-    public function getWeather(): array
-    {
-        $location = $this->getArakanLocation();
-
-        try {
-            $currentWeather = $this->getCurrentWeather(
-                $location['latitude'],
-                $location['longitude']
-            );
-
-            return [
-                'success' => true,
-                'location' => $location['name'].', '.$location['country'],
-                'temperature' => $currentWeather['temperature'],
-                'condition' => $currentWeather['condition'],
-                'humidity' => $currentWeather['humidity'],
-                'wind_speed' => $currentWeather['wind_speed'],
-            ];
-        } catch (ConnectionException $exception) {
-            $this->logWeatherException($exception);
-
-            $message = str_contains(strtolower($exception->getMessage()), 'timed out')
-                ? 'Weather API request timed out. Please try again.'
-                : 'Could not connect to Open-Meteo. Check the server network connection.';
-
-            return $this->unavailableWeather($message);
-        } catch (Throwable $exception) {
-            $this->logWeatherException($exception);
-
-            return $this->unavailableWeather($exception->getMessage());
-        }
-    }
-
-    public function getArakanWeather(): array
-    {
-        $location = $this->getArakanLocation();
-        $cacheKey = 'weather.arakan';
-        $cachedWeather = Cache::get($cacheKey);
-
-        try {
-            $weather = $this->getCurrentWeather($location['latitude'], $location['longitude']);
-            $weather = array_merge($weather, [
-                'location' => $location['name'],
-                'country' => $location['country'],
-                'is_cached' => false,
-                'warning' => null,
-            ]);
-
-            Cache::put($cacheKey, $weather, now()->addMinutes(10));
-
-            return $weather;
-        } catch (Throwable $exception) {
-            $this->logWeatherException($exception);
-
-            if (is_array($cachedWeather) && ! empty($cachedWeather)) {
-                return array_merge($cachedWeather, [
-                    'is_cached' => true,
-                    'warning' => 'Weather service temporarily unavailable. Showing the latest Arakan weather snapshot.',
-                ]);
-            }
-
-            return $this->buildUnavailableWeather($location, $exception);
-        }
-    }
-
-    /**
-     * @return array{
+     * @return list<array{
      *     name: string,
-     *     country: string,
+     *     state: string|null,
+     *     country: string|null,
+     *     country_code: string|null,
      *     latitude: float,
-     *     longitude: float,
-     *     timezone: string
-     * }
+     *     longitude: float
+     * }>
      */
-    public function getArakanLocation(): array
+    public function searchLocations(string $query, bool $useNominatimFallback = false): array
     {
-        $location = config('services.weather.location', []);
+        $query = trim($query);
 
-        return [
-            'name' => $location['name'] ?? 'Arakan, Cotabato',
-            'country' => $location['country'] ?? 'Philippines',
-            'latitude' => (float) ($location['latitude'] ?? 7.3521621),
-            'longitude' => (float) ($location['longitude'] ?? 125.1282103),
-            'timezone' => $location['timezone'] ?? 'Asia/Manila',
-        ];
+        if (mb_strlen($query) < 2 || mb_strlen($query) > 120) {
+            throw new InvalidArgumentException('Enter a location between 2 and 120 characters.');
+        }
+
+        $locations = Cache::remember(
+            'weather:open-meteo:geocoding:'.hash('sha256', mb_strtolower($query)),
+            now()->addDay(),
+            function () use ($query): array {
+                $payload = $this->getJson(
+                    (string) config('services.open_meteo.geocoding_url'),
+                    [
+                        'name' => $query,
+                        'count' => 8,
+                        'language' => 'en',
+                        'format' => 'json',
+                    ],
+                    'location search'
+                );
+
+                $results = data_get($payload, 'results', []);
+
+                if (! is_array($results)) {
+                    throw new RuntimeException('Location search returned invalid data.');
+                }
+
+                $locations = [];
+
+                foreach ($results as $result) {
+                    $name = data_get($result, 'name');
+                    $latitude = data_get($result, 'latitude');
+                    $longitude = data_get($result, 'longitude');
+
+                    if (! is_string($name)
+                        || trim($name) === ''
+                        || ! is_numeric($latitude)
+                        || ! is_numeric($longitude)
+                        || (float) $latitude < -90
+                        || (float) $latitude > 90
+                        || (float) $longitude < -180
+                        || (float) $longitude > 180) {
+                        continue;
+                    }
+
+                    $locations[] = [
+                        'name' => $name,
+                        'state' => $this->firstString(
+                            data_get($result, 'admin1'),
+                            data_get($result, 'admin2')
+                        ),
+                        'country' => is_string(data_get($result, 'country')) ? $result['country'] : null,
+                        'country_code' => is_string(data_get($result, 'country_code')) ? $result['country_code'] : null,
+                        'latitude' => (float) $latitude,
+                        'longitude' => (float) $longitude,
+                    ];
+                }
+
+                return $locations;
+            }
+        );
+
+        if ($locations !== [] || ! $useNominatimFallback) {
+            return $locations;
+        }
+
+        return $this->searchNominatimLocations($query);
     }
 
     /**
      * @return array{
      *     location: string,
+     *     state: string|null,
      *     country: string|null,
+     *     country_code: string|null,
      *     latitude: float,
      *     longitude: float,
      *     temperature: float,
-     *     feels_like: float|null,
+     *     temperature_min: float|null,
+     *     temperature_max: float|null,
+     *     feels_like: float,
      *     condition: string,
      *     description: string,
+     *     icon: string,
+     *     is_day: bool,
      *     humidity: int,
      *     wind_speed: float,
-     *     wind_direction: string,
-     *     cloudiness: int|null,
+     *     precipitation: float|null,
      *     updated_at: string,
+     *     timezone: string|null,
      *     provider: string,
-     *     is_cached: bool,
-     *     warning: string|null
+     *     hourly_forecast: list<array{
+     *         time: string,
+     *         temperature: float,
+     *         condition: string,
+     *         description: string,
+     *         icon: string,
+     *         precipitation_probability: int|null
+     *     }>,
+     *     daily_forecast: list<array{
+     *         date: string,
+     *         temperature_min: float,
+     *         temperature_max: float,
+     *         condition: string,
+     *         description: string,
+     *         icon: string,
+     *         precipitation_probability: int|null
+     *     }>
      * }
      */
-    public function getCurrentWeather(float $latitude, float $longitude): array
-    {
+    public function getCurrentWeather(
+        float $latitude,
+        float $longitude,
+        ?string $locationName = null,
+        ?string $state = null,
+        ?string $country = null,
+        ?string $countryCode = null,
+        bool $reverseGeocode = false
+    ): array {
         $this->validateCoordinates($latitude, $longitude);
 
-        $payload = $this->getJson(
-            (string) config('services.weather.url'),
-            [
-                'latitude' => $latitude,
-                'longitude' => $longitude,
-                'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
-                'wind_speed_unit' => 'ms',
-                'timezone' => 'auto',
-            ],
-            'current weather'
-        );
-        $current = data_get($payload, 'current');
-        $temperature = data_get($current, 'temperature_2m');
-        $humidity = data_get($current, 'relative_humidity_2m');
-        $weatherCode = data_get($current, 'weather_code');
-        $windSpeed = data_get($current, 'wind_speed_10m');
+        $locationKey = hash('sha256', implode('|', [
+            $locationName ?? '',
+            $state ?? '',
+            $country ?? '',
+            $countryCode ?? '',
+            $reverseGeocode ? '1' : '0',
+        ]));
+        $cacheKey = 'weather:open-meteo:current:'.number_format($latitude, 6, '.', '').':'.number_format($longitude, 6, '.', '').':'.$locationKey;
 
-        if (! is_array($current)
-            || ! is_numeric($temperature)
-            || ! is_numeric($humidity)
-            || ! is_numeric($weatherCode)
-            || ! is_numeric($windSpeed)) {
-            throw new RuntimeException('Open-Meteo returned incomplete current weather data.');
-        }
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use (
+            $latitude,
+            $longitude,
+            $locationName,
+            $state,
+            $country,
+            $countryCode,
+            $reverseGeocode
+        ): array {
+            $payload = $this->getJson(
+                (string) config('services.open_meteo.forecast_url'),
+                [
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
+                    'hourly' => 'temperature_2m,precipitation_probability,weather_code',
+                    'daily' => 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+                    'forecast_days' => 5,
+                    'temperature_unit' => 'celsius',
+                    'wind_speed_unit' => 'ms',
+                    'timezone' => 'auto',
+                ],
+                'current weather'
+            );
 
-        $condition = $this->weatherCondition((int) $weatherCode);
+            $current = data_get($payload, 'current');
+            $temperature = data_get($current, 'temperature_2m');
+            $feelsLike = data_get($current, 'apparent_temperature');
+            $humidity = data_get($current, 'relative_humidity_2m');
+            $windSpeed = data_get($current, 'wind_speed_10m');
+            $precipitation = data_get($current, 'precipitation');
+            $weatherCode = data_get($current, 'weather_code');
+            $isDay = data_get($current, 'is_day');
+            $observedAt = data_get($current, 'time');
 
-        return [
-            'location' => 'Weather station',
-            'country' => null,
-            'latitude' => (float) data_get($payload, 'latitude', $latitude),
-            'longitude' => (float) data_get($payload, 'longitude', $longitude),
-            'temperature' => round((float) $temperature, 1),
-            'feels_like' => is_numeric(data_get($current, 'apparent_temperature'))
-                ? round((float) data_get($current, 'apparent_temperature'), 1)
-                : null,
-            'condition' => $condition,
-            'description' => $condition,
-            'humidity' => (int) $humidity,
-            'wind_speed' => round((float) $windSpeed, 1),
-            'wind_direction' => 'Variable',
-            'cloudiness' => null,
-            'updated_at' => (string) data_get($current, 'time', now()->toIso8601String()),
-            'provider' => 'Open-Meteo',
-            'is_cached' => false,
-            'warning' => null,
-        ];
+            if (! is_numeric($temperature)
+                || ! is_numeric($feelsLike)
+                || ! is_numeric($humidity)
+                || (float) $humidity < 0
+                || (float) $humidity > 100
+                || ! is_numeric($windSpeed)
+                || (float) $windSpeed < 0
+                || ! is_numeric($weatherCode)
+                || ! is_numeric($isDay)
+                || ! in_array((int) $isDay, [0, 1], true)
+                || ! is_string($observedAt)
+                || ! preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $observedAt)) {
+                throw new RuntimeException('Weather service returned incomplete current conditions.');
+            }
+
+            $weatherCondition = $this->weatherCondition((int) $weatherCode, (bool) $isDay);
+            $reverseLocation = $reverseGeocode ? $this->reverseGeocode($latitude, $longitude) : null;
+            $daily = data_get($payload, 'daily');
+            $hourly = data_get($payload, 'hourly');
+            $dailyForecast = $this->dailyForecast(is_array($daily) ? $daily : null);
+            $hourlyForecast = $this->hourlyForecast(is_array($hourly) ? $hourly : null, $observedAt);
+
+            return [
+                'location' => $reverseLocation['name'] ?? $locationName ?? 'Current location',
+                'state' => $reverseLocation['state'] ?? $state,
+                'country' => $reverseLocation['country'] ?? $country,
+                'country_code' => $reverseLocation['country_code'] ?? $countryCode,
+                'latitude' => (float) data_get($payload, 'latitude', $latitude),
+                'longitude' => (float) data_get($payload, 'longitude', $longitude),
+                'temperature' => round((float) $temperature, 1),
+                'temperature_min' => $dailyForecast[0]['temperature_min'] ?? null,
+                'temperature_max' => $dailyForecast[0]['temperature_max'] ?? null,
+                'feels_like' => round((float) $feelsLike, 1),
+                'condition' => $weatherCondition['condition'],
+                'description' => $weatherCondition['description'],
+                'icon' => $weatherCondition['icon'],
+                'is_day' => (bool) $isDay,
+                'humidity' => (int) $humidity,
+                'wind_speed' => round((float) $windSpeed, 1),
+                'precipitation' => is_numeric($precipitation) ? round((float) $precipitation, 1) : null,
+                'updated_at' => $observedAt,
+                'timezone' => is_string(data_get($payload, 'timezone')) ? $payload['timezone'] : null,
+                'provider' => 'Open-Meteo',
+                'hourly_forecast' => $hourlyForecast,
+                'daily_forecast' => $dailyForecast,
+            ];
+        });
     }
 
-    protected function validateCoordinates(float $latitude, float $longitude): void
+    private function validateCoordinates(float $latitude, float $longitude): void
     {
-        if ($latitude < -90 || $latitude > 90) {
+        if (! is_finite($latitude) || $latitude < -90 || $latitude > 90) {
             throw new InvalidArgumentException('Latitude must be between -90 and 90.');
         }
 
-        if ($longitude < -180 || $longitude > 180) {
+        if (! is_finite($longitude) || $longitude < -180 || $longitude > 180) {
             throw new InvalidArgumentException('Longitude must be between -180 and 180.');
         }
     }
 
     /**
-     * @param  array<string, float|int|string>  $query
-     * @return array<string, mixed>
+     * @param  array<string, int|float|string>  $query
+     * @return array<mixed>
      */
     private function getJson(string $url, array $query, string $operation): array
     {
-        $response = Http::timeout(10)
-            ->connectTimeout(5)
-            ->get($url, $query);
+        if (trim($url) === '') {
+            throw new RuntimeException('Weather service endpoint is not configured.');
+        }
 
-        if (! $response->successful()) {
-            $providerMessage = data_get($response->json(), 'reason')
-                ?? data_get($response->json(), 'message');
-            $providerMessage = is_string($providerMessage)
-                ? trim(strip_tags($providerMessage))
-                : null;
-
-            Log::warning('Open-Meteo request failed.', [
+        try {
+            $response = Http::connectTimeout(5)
+                ->timeout(10)
+                ->get($url, $query);
+        } catch (ConnectionException $exception) {
+            $timedOut = str_contains(strtolower($exception->getMessage()), 'timed out');
+            Log::warning('Open-Meteo request could not be completed.', [
+                'provider' => 'Open-Meteo',
                 'operation' => $operation,
-                'status' => $response->status(),
-                'provider_message' => $providerMessage,
+                'error_category' => $timedOut ? 'timeout' : 'connection_failure',
             ]);
 
-            throw new RuntimeException($this->httpFailureMessage(
-                $operation,
-                $response->status(),
-                $providerMessage
-            ), $response->status());
+            throw new RuntimeException(
+                $timedOut
+                    ? 'Weather service request timed out. Please try again.'
+                    : 'Weather service is temporarily unavailable. Please try again.'
+            );
+        }
+
+        if (! $response->successful()) {
+            $status = $response->status();
+            $category = match ($status) {
+                400, 422 => 'invalid_request',
+                429 => 'rate_limited',
+                default => $response->serverError() ? 'provider_unavailable' : 'request_rejected',
+            };
+
+            Log::warning('Open-Meteo request failed.', [
+                'provider' => 'Open-Meteo',
+                'operation' => $operation,
+                'status' => $status,
+                'error_category' => $category,
+            ]);
+
+            throw new RuntimeException(match (true) {
+                $status === 429 => 'Weather service is busy. Please try again shortly.',
+                $status === 403 => 'Weather provider has restricted this request. Please try again later or contact the administrator.',
+                $status >= 500 => 'Weather service is temporarily unavailable. Please try again.',
+                $operation === 'location search' => 'Location search is temporarily unavailable. Please try again.',
+                default => 'Weather service could not process this location. Check the coordinates and try again.',
+            });
         }
 
         $payload = $response->json();
 
-        if (! is_array($payload)) {
-            throw new RuntimeException("Open-Meteo returned invalid JSON for {$operation}.");
+        if (! is_array($payload) || isset($payload['error']) && $payload['error'] === true) {
+            Log::warning('Open-Meteo returned an invalid response payload.', [
+                'provider' => 'Open-Meteo',
+                'operation' => $operation,
+                'status' => $response->status(),
+                'error_category' => 'invalid_response',
+            ]);
+
+            throw new RuntimeException(
+                $operation === 'location search'
+                    ? 'Location search returned invalid data.'
+                    : 'Weather service returned invalid weather data.'
+            );
         }
 
         return $payload;
     }
 
-    private function weatherCondition(int $code): string
+    /**
+     * @param  array<string, int|float|string>  $query
+     */
+    private function nominatimRequest(string $url, array $query, string $operation): ?Response
     {
-        return match ($code) {
-            0 => 'Clear sky',
-            1 => 'Mainly clear',
-            2 => 'Partly cloudy',
-            3 => 'Overcast',
-            45, 48 => 'Fog',
-            51 => 'Light drizzle',
-            53 => 'Moderate drizzle',
-            55 => 'Dense drizzle',
-            56, 57 => 'Freezing drizzle',
-            61 => 'Slight rain',
-            63 => 'Moderate rain',
-            65 => 'Heavy rain',
-            66, 67 => 'Freezing rain',
-            71 => 'Slight snowfall',
-            73 => 'Moderate snowfall',
-            75 => 'Heavy snowfall',
-            77 => 'Snow grains',
-            80 => 'Slight rain showers',
-            81 => 'Moderate rain showers',
-            82 => 'Violent rain showers',
-            85 => 'Slight snow showers',
-            86 => 'Heavy snow showers',
-            95 => 'Thunderstorm',
-            96, 99 => 'Thunderstorm with hail',
-            default => 'Unknown conditions',
-        };
-    }
+        try {
+            return Cache::lock('weather:nominatim:rate-limit-lock', 10)->block(10, function () use ($url, $query) {
+                $lastRequest = Cache::get('weather:nominatim:last-request');
+                if (is_numeric($lastRequest)) {
+                    $waitMicroseconds = max(0, (int) (1_000_000 - ((microtime(true) - (float) $lastRequest) * 1_000_000)));
+                    if ($waitMicroseconds > 0) {
+                        usleep($waitMicroseconds);
+                    }
+                }
+                Cache::put('weather:nominatim:last-request', microtime(true), now()->addSeconds(3));
 
-    private function httpFailureMessage(
-        string $operation,
-        int $status,
-        ?string $providerMessage
-    ): string {
-        $message = match ($status) {
-            401, 403 => "Open-Meteo rejected the {$operation} request (HTTP {$status}).",
-            404 => $operation === 'location search'
-                ? 'Open-Meteo location search endpoint was not found (HTTP 404).'
-                : 'Open-Meteo weather endpoint was not found (HTTP 404).',
-            429 => 'Open-Meteo rate limit reached. Please try again later.',
-            500, 502, 503, 504 => 'Open-Meteo is temporarily unavailable. Please try again later.',
-            default => "Open-Meteo {$operation} request failed with HTTP {$status}.",
-        };
+                return Http::withUserAgent((string) config('services.open_meteo.reverse_user_agent'))
+                    ->connectTimeout(5)
+                    ->timeout(10)
+                    ->get($url, $query);
+            });
+        } catch (ConnectionException $exception) {
+            Log::warning('OpenStreetMap geocoding could not be completed.', [
+                'provider' => 'Nominatim',
+                'operation' => $operation,
+                'error_category' => 'connection_failure',
+            ]);
+        } catch (LockTimeoutException $exception) {
+            Log::warning('OpenStreetMap geocoding is currently rate limited.', [
+                'provider' => 'Nominatim',
+                'operation' => $operation,
+                'error_category' => 'local_rate_limit',
+            ]);
+        }
 
-        return filled($providerMessage)
-            ? $message.' Provider message: '.$providerMessage
-            : $message;
+        return null;
     }
 
     /**
-     * @param  array{name: string, country: string, latitude: float, longitude: float, timezone: string}  $location
-     * @return array<string, mixed>
+     * @return list<array{
+     *     name: string,
+     *     state: string|null,
+     *     country: string|null,
+     *     country_code: string|null,
+     *     latitude: float,
+     *     longitude: float
+     * }>
      */
-    protected function buildUnavailableWeather(array $location, ?Throwable $exception = null): array
+    private function searchNominatimLocations(string $query): array
     {
-        return [
-            'location' => $location['name'],
-            'country' => $location['country'],
-            'latitude' => $location['latitude'],
-            'longitude' => $location['longitude'],
-            'temperature' => null,
-            'feels_like' => null,
-            'condition' => 'Weather unavailable',
-            'description' => 'Weather service temporarily unavailable',
-            'humidity' => null,
-            'wind_speed' => null,
-            'wind_direction' => 'Variable',
-            'cloudiness' => null,
-            'updated_at' => now()->toIso8601String(),
-            'provider' => 'Open-Meteo',
-            'is_cached' => false,
-            'warning' => $exception?->getMessage() ?? 'Weather service temporarily unavailable',
-        ];
+        $cacheKey = 'weather:nominatim:search:'.hash('sha256', mb_strtolower($query));
+        $cachedResults = Cache::get($cacheKey);
+        if (is_array($cachedResults)) {
+            return $cachedResults;
+        }
+
+        $response = $this->nominatimRequest((string) config('services.open_meteo.nominatim_search_url'), [
+            'q' => $query,
+            'format' => 'jsonv2',
+            'addressdetails' => 1,
+            'limit' => 8,
+        ], 'forward geocoding');
+
+        if (! $response instanceof Response) {
+            throw new RuntimeException('Location search is temporarily unavailable. Please try again.');
+        }
+
+        if (! $response->successful()) {
+            Log::warning('OpenStreetMap location search failed.', [
+                'provider' => 'Nominatim',
+                'status' => $response->status(),
+                'error_category' => $response->status() === 429 ? 'rate_limited' : 'provider_rejected',
+            ]);
+
+            throw new RuntimeException(
+                $response->status() === 429
+                    ? 'Location search is busy. Please try again shortly.'
+                    : 'Location search is temporarily unavailable. Please try again.'
+            );
+        }
+
+        $places = $response->json();
+        if (! is_array($places)) {
+            throw new RuntimeException('Location search returned invalid data.');
+        }
+
+        $locations = [];
+        foreach ($places as $place) {
+            $latitude = data_get($place, 'lat');
+            $longitude = data_get($place, 'lon');
+            $address = data_get($place, 'address', []);
+
+            if (! is_array($address)
+                || ! is_numeric($latitude)
+                || ! is_numeric($longitude)
+                || (float) $latitude < -90
+                || (float) $latitude > 90
+                || (float) $longitude < -180
+                || (float) $longitude > 180) {
+                continue;
+            }
+
+            $name = $this->firstString(
+                data_get($place, 'name'),
+                data_get($address, 'city'),
+                data_get($address, 'town'),
+                data_get($address, 'village'),
+                data_get($address, 'municipality'),
+                data_get($address, 'county')
+            );
+
+            if ($name === null) {
+                continue;
+            }
+
+            $locations[] = [
+                'name' => $name,
+                'state' => $this->firstString(data_get($address, 'state'), data_get($address, 'region')),
+                'country' => is_string(data_get($address, 'country')) ? $address['country'] : null,
+                'country_code' => is_string(data_get($address, 'country_code')) ? strtoupper($address['country_code']) : null,
+                'latitude' => (float) $latitude,
+                'longitude' => (float) $longitude,
+            ];
+        }
+
+        Cache::put($cacheKey, $locations, now()->addDay());
+
+        return $locations;
     }
 
     /**
-     * @return array{success: false, message: string}
+     * @return array{name: string, state: string|null, country: string|null, country_code: string|null}|null
      */
-    private function unavailableWeather(
-        string $message = 'Weather information is currently unavailable.'
-    ): array {
+    private function reverseGeocode(float $latitude, float $longitude): ?array
+    {
+        $cacheKey = 'weather:nominatim:reverse:'.number_format($latitude, 4, '.', '').':'.number_format($longitude, 4, '.', '');
+
+        $result = Cache::remember($cacheKey, now()->addDays(30), function () use ($latitude, $longitude): array {
+            $response = $this->nominatimRequest(
+                (string) config('services.open_meteo.reverse_geocoding_url'),
+                [
+                    'lat' => $latitude,
+                    'lon' => $longitude,
+                    'format' => 'jsonv2',
+                    'addressdetails' => 1,
+                ],
+                'reverse geocoding'
+            );
+
+            if (! $response instanceof Response) {
+                return [];
+            }
+
+            if (! $response->successful()) {
+                Log::warning('OpenStreetMap reverse geocoding failed.', [
+                    'provider' => 'Nominatim',
+                    'status' => $response->status(),
+                    'error_category' => 'reverse_geocoding_unavailable',
+                ]);
+
+                return [];
+            }
+
+            $address = $response->json('address');
+            if (! is_array($address)) {
+                return [];
+            }
+
+            $name = $this->firstString(
+                data_get($address, 'city'),
+                data_get($address, 'town'),
+                data_get($address, 'village'),
+                data_get($address, 'municipality'),
+                data_get($address, 'county'),
+                data_get($address, 'state')
+            );
+
+            if ($name === null) {
+                return [];
+            }
+
+            return [
+                'name' => $name,
+                'state' => $this->firstString(data_get($address, 'state'), data_get($address, 'region')),
+                'country' => is_string(data_get($address, 'country')) ? $address['country'] : null,
+                'country_code' => is_string(data_get($address, 'country_code')) ? strtoupper($address['country_code']) : null,
+            ];
+        });
+
+        return $result === [] ? null : $result;
+    }
+
+    /**
+     * @param  array<mixed>|null  $hourly
+     * @return list<array{
+     *     time: string,
+     *     temperature: float,
+     *     condition: string,
+     *     description: string,
+     *     icon: string,
+     *     precipitation_probability: int|null
+     * }>
+     */
+    private function hourlyForecast(?array $hourly, string $currentTime): array
+    {
+        $times = data_get($hourly, 'time', []);
+        $temperatures = data_get($hourly, 'temperature_2m', []);
+        $weatherCodes = data_get($hourly, 'weather_code', []);
+        $precipitation = data_get($hourly, 'precipitation_probability', []);
+
+        if (! is_array($times) || ! is_array($temperatures) || ! is_array($weatherCodes)) {
+            return [];
+        }
+
+        $forecast = [];
+        foreach ($times as $index => $time) {
+            $temperature = $temperatures[$index] ?? null;
+            $weatherCode = $weatherCodes[$index] ?? null;
+
+            if (! is_string($time)
+                || ! is_numeric($temperature)
+                || ! is_numeric($weatherCode)
+                || $time < $currentTime) {
+                continue;
+            }
+
+            $condition = $this->weatherCondition((int) $weatherCode, true);
+            $probability = $precipitation[$index] ?? null;
+            $forecast[] = [
+                'time' => $time,
+                'temperature' => round((float) $temperature, 1),
+                'condition' => $condition['condition'],
+                'description' => $condition['description'],
+                'icon' => $condition['icon'],
+                'precipitation_probability' => is_numeric($probability) ? (int) $probability : null,
+            ];
+
+            if (count($forecast) === 6) {
+                break;
+            }
+        }
+
+        return $forecast;
+    }
+
+    /**
+     * @param  array<mixed>|null  $daily
+     * @return list<array{
+     *     date: string,
+     *     temperature_min: float,
+     *     temperature_max: float,
+     *     condition: string,
+     *     description: string,
+     *     icon: string,
+     *     precipitation_probability: int|null
+     * }>
+     */
+    private function dailyForecast(?array $daily): array
+    {
+        $dates = data_get($daily, 'time', []);
+        $minimums = data_get($daily, 'temperature_2m_min', []);
+        $maximums = data_get($daily, 'temperature_2m_max', []);
+        $weatherCodes = data_get($daily, 'weather_code', []);
+        $precipitation = data_get($daily, 'precipitation_probability_max', []);
+
+        if (! is_array($dates) || ! is_array($minimums) || ! is_array($maximums) || ! is_array($weatherCodes)) {
+            return [];
+        }
+
+        $forecast = [];
+        foreach ($dates as $index => $date) {
+            $minimum = $minimums[$index] ?? null;
+            $maximum = $maximums[$index] ?? null;
+            $weatherCode = $weatherCodes[$index] ?? null;
+
+            if (! is_string($date)
+                || ! is_numeric($minimum)
+                || ! is_numeric($maximum)
+                || ! is_numeric($weatherCode)) {
+                continue;
+            }
+
+            $condition = $this->weatherCondition((int) $weatherCode, true);
+            $probability = $precipitation[$index] ?? null;
+            $forecast[] = [
+                'date' => $date,
+                'temperature_min' => round((float) $minimum, 1),
+                'temperature_max' => round((float) $maximum, 1),
+                'condition' => $condition['condition'],
+                'description' => $condition['description'],
+                'icon' => $condition['icon'],
+                'precipitation_probability' => is_numeric($probability) ? (int) $probability : null,
+            ];
+        }
+
+        return array_slice($forecast, 0, 5);
+    }
+
+    /**
+     * @return array{condition: string, description: string, icon: string}
+     */
+    private function weatherCondition(int $code, bool $isDay): array
+    {
+        $condition = match ($code) {
+            0 => ['Clear', 'Clear sky', $isDay ? 'sun' : 'moon'],
+            1 => ['Mainly clear', 'Mainly clear', $isDay ? 'sun' : 'moon'],
+            2 => ['Partly cloudy', 'Partly cloudy', 'partly-cloudy'],
+            3 => ['Cloudy', 'Overcast', 'cloud'],
+            45, 48 => ['Fog', 'Fog', 'fog'],
+            51, 53, 55, 56, 57 => ['Drizzle', 'Drizzle', 'rain'],
+            61, 63, 65, 66, 67, 80, 81, 82 => ['Rain', 'Rain', 'rain'],
+            71, 73, 75, 77, 85, 86 => ['Snow', 'Snow', 'snow'],
+            95, 96, 99 => ['Thunderstorm', 'Thunderstorm', 'storm'],
+            default => ['Unknown', 'Weather condition unavailable', 'cloud'],
+        };
+
         return [
-            'success' => false,
-            'message' => $message,
+            'condition' => $condition[0],
+            'description' => $condition[1],
+            'icon' => $condition[2],
         ];
     }
 
-    private function logWeatherException(Throwable $exception): void
+    private function firstString(mixed ...$values): ?string
     {
-        Log::warning('Open-Meteo weather request failed.', [
-            'error' => $exception->getMessage(),
-        ]);
+        foreach ($values as $value) {
+            if (is_string($value) && trim($value) !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 }

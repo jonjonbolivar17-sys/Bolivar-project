@@ -27,6 +27,10 @@
                 @endforeach
             </section>
 
+            <x-admin.weather-widget
+                :endpoint="route('admin.weather')"
+            />
+
             <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -72,31 +76,6 @@
                 @endif
             </section>
 
-            <section id="weather-widget" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h2 class="text-lg font-extrabold text-slate-950">Current Weather</h2>
-                        <p class="mt-1 text-sm text-slate-600">Arakan, Cotabato · Philippines</p>
-                    </div>
-                    <span class="rounded-full px-3 py-1 text-xs font-bold {{ ($weather['success'] ?? false) ? 'bg-emerald-50 text-emerald-900' : 'bg-amber-50 text-amber-900' }}">
-                        {{ ($weather['success'] ?? false) ? 'AVAILABLE' : 'UNAVAILABLE' }}
-                    </span>
-                </div>
-                @if ($weather['success'] ?? false)
-                    <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <div><p class="text-xs font-semibold uppercase text-slate-500">Location</p><p class="mt-1 font-bold text-slate-900">{{ $weather['location'] }}</p></div>
-                        <div><p class="text-xs font-semibold uppercase text-slate-500">Temperature</p><p class="mt-1 font-bold text-slate-900">{{ number_format((float) $weather['temperature'], 1) }} °C</p></div>
-                        <div><p class="text-xs font-semibold uppercase text-slate-500">Condition</p><p class="mt-1 font-bold text-slate-900">{{ $weather['condition'] }}</p></div>
-                        <div><p class="text-xs font-semibold uppercase text-slate-500">Humidity · Wind</p><p class="mt-1 font-bold text-slate-900">{{ $weather['humidity'] }}% · {{ number_format((float) $weather['wind_speed'], 1) }} m/s</p></div>
-                    </div>
-                    <p class="mt-4 text-xs text-slate-500">Weather data provided by {{ $weather['provider'] ?? 'Open-Meteo' }}.</p>
-                @else
-                    <p class="mt-4 text-sm text-slate-700">{{ $weather['message'] ?? 'Weather data is temporarily unavailable.' }}</p>
-                    @if (! empty($weather['provider_message']))
-                        <p class="mt-2 text-xs text-slate-500">Provider message: {{ $weather['provider_message'] }}</p>
-                    @endif
-                @endif
-            </section>
         </div>
     </x-command-shell>
 @endsection

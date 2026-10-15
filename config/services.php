@@ -35,15 +35,12 @@ return [
         ],
     ],
 
-    'weather' => [
-        'url' => 'https://api.open-meteo.com/v1/forecast',
-        'location' => [
-            'name' => env('WEATHER_LOCATION_NAME', 'Arakan, Cotabato'),
-            'country' => env('WEATHER_LOCATION_COUNTRY', 'Philippines'),
-            'latitude' => (float) env('WEATHER_LOCATION_LATITUDE', 7.3521621),
-            'longitude' => (float) env('WEATHER_LOCATION_LONGITUDE', 125.1282103),
-            'timezone' => env('WEATHER_LOCATION_TIMEZONE', 'Asia/Manila'),
-        ],
+    'open_meteo' => [
+        'forecast_url' => env('OPEN_METEO_FORECAST_URL', 'https://api.open-meteo.com/v1/forecast'),
+        'geocoding_url' => env('OPEN_METEO_GEOCODING_URL', 'https://geocoding-api.open-meteo.com/v1/search'),
+        'nominatim_search_url' => env('NOMINATIM_SEARCH_URL', 'https://nominatim.openstreetmap.org/search'),
+        'reverse_geocoding_url' => env('OPEN_METEO_REVERSE_GEOCODING_URL', 'https://nominatim.openstreetmap.org/reverse'),
+        'reverse_user_agent' => env('APP_NAME', 'AkoHanda').' weather location lookup',
     ],
 
 ];
